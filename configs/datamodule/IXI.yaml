@@ -32,6 +32,11 @@ cfg:
         test: ${data_dir}/Data/splits/MSLUB_test.csv
         val: ${data_dir}/Data/splits/MSLUB_val.csv
 
+    MOOD:
+      IDs: 
+        test: ${data_dir}/Data/splits/MOOD_test.csv
+        val: ${data_dir}/Data/splits/MOOD_val.csv
+
 
   imageDim: [160,192,160] 
   rescaleFactor: 2
@@ -69,6 +74,7 @@ cfg:
   testsets: # specify which test sets to evaluate!
   - Datamodules_eval.Brats21
   - Datamodules_eval.MSLUB
+  - Datamodules_eval.MOOD
   - Datamodules_train.IXI
 
 

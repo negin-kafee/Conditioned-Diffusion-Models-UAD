@@ -1,0 +1,94 @@
+_target_: src.datamodules.Datamodules_train_combined.IXI_T1_T2_MOOD
+
+cfg:
+  name: IXI_T1_T2_MOOD_Combined
+  path:
+    pathBase: ${data_dir}
+
+    IXI_T1:
+      IDs: 
+        train: 
+          - ${data_dir}/Data/splits/IXI_T1_train_fold0.csv
+          - ${data_dir}/Data/splits/IXI_T1_train_fold1.csv
+          - ${data_dir}/Data/splits/IXI_T1_train_fold2.csv
+          - ${data_dir}/Data/splits/IXI_T1_train_fold3.csv
+          - ${data_dir}/Data/splits/IXI_T1_train_fold4.csv
+        val: 
+          - ${data_dir}/Data/splits/IXI_T1_val_fold0.csv
+          - ${data_dir}/Data/splits/IXI_T1_val_fold1.csv
+          - ${data_dir}/Data/splits/IXI_T1_val_fold2.csv
+          - ${data_dir}/Data/splits/IXI_T1_val_fold3.csv
+          - ${data_dir}/Data/splits/IXI_T1_val_fold4.csv
+        test: ${data_dir}/Data/splits/IXI_T1_test.csv
+
+    IXI_T2:
+      IDs: 
+        train: 
+          - ${data_dir}/Data/splits/IXI_T2_train_fold0.csv
+          - ${data_dir}/Data/splits/IXI_T2_train_fold1.csv
+          - ${data_dir}/Data/splits/IXI_T2_train_fold2.csv
+          - ${data_dir}/Data/splits/IXI_T2_train_fold3.csv
+          - ${data_dir}/Data/splits/IXI_T2_train_fold4.csv
+        val: 
+          - ${data_dir}/Data/splits/IXI_T2_val_fold0.csv
+          - ${data_dir}/Data/splits/IXI_T2_val_fold1.csv
+          - ${data_dir}/Data/splits/IXI_T2_val_fold2.csv
+          - ${data_dir}/Data/splits/IXI_T2_val_fold3.csv
+          - ${data_dir}/Data/splits/IXI_T2_val_fold4.csv
+        test: ${data_dir}/Data/splits/IXI_T2_test.csv
+
+    # MOOD training data (OPTIONAL - only if you have healthy MOOD subjects)
+    # Comment out these lines if MOOD has no healthy subjects
+    # MOOD:
+    #   IDs: 
+    #     train: ${data_dir}/Data/splits/MOOD_train.csv        # Only healthy subjects (label=0)
+    #     val_train: ${data_dir}/Data/splits/MOOD_val_train.csv  # Only healthy subjects (label=0)
+
+    # Test datasets - handled by separate evaluation datamodules
+    Brats21:
+      IDs: 
+        test: ${data_dir}/Data/splits/Brats21_test.csv
+        val: ${data_dir}/Data/splits/Brats21_val.csv
+    
+    MOOD:
+      IDs:
+        test: ${data_dir}/Data/splits/MOOD_test.csv           # Anomalous subjects for testing
+        val: ${data_dir}/Data/splits/MOOD_val.csv             # Anomalous subjects for testing
+
+
+  imageDim: [160,192,160] 
+  rescaleFactor: 2
+  interRes: [8,8,5] #[HxWxD]
+  cropMode: 'isotropic'
+  spatialDims: ${model.cfg.spatialDims}
+  unisotropic_sampling: True
+  sample_set: False
+
+  preLoad: True
+  curvatureFlow: True
+  percentile: True
+  pad: True
+  permute: False
+
+  # Augmentations
+  randomRotate: False
+  rotateDegree: 5
+  horizontalFlip: False
+  randomBrightness: False
+  brightnessRange: (0.75,1.25)
+  randomContrast: False
+  contrastRange: (0.75,1.25)
+  
+  modelpath: ${data_dir}/Data/pretrained_2D_model/
+  num_workers: 4
+  batch_size: 32
+  lr : 0.0001
+  droplast: True
+
+
+  # Evaluation - test only on BraTS
+  resizedEvaluation: True
+  testsets: # specify which test sets to evaluate!
+  - Datamodules_eval.Brats21
+  # Optionally also evaluate on MOOD test set
+  - Datamodules_eval.MOOD

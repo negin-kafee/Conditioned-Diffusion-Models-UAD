@@ -89,3 +89,50 @@ class MSLUB(LightningDataModule):
 
     def test_dataloader(self):
         return DataLoader(self.test_eval, batch_size=1, num_workers=self.cfg.num_workers, pin_memory=True, shuffle=False)
+
+
+class MOOD(LightningDataModule):
+
+    def __init__(self, cfg, fold= None):
+        super(MOOD, self).__init__()
+        self.cfg = cfg
+        self.preload = cfg.get('preload',True)
+        # load data paths and indices
+        self.imgpath = {}
+        self.csvpath_val = cfg.path.MOOD.IDs.val
+        self.csvpath_test = cfg.path.MOOD.IDs.test
+        self.csv = {}
+        states = ['val','test']
+
+        self.csv['val'] = pd.read_csv(self.csvpath_val)
+        self.csv['test'] = pd.read_csv(self.csvpath_test)
+        for state in states:
+            self.csv[state]['settype'] = state
+            self.csv[state]['setname'] = 'MOOD'
+
+            self.csv[state]['img_path'] = cfg.path.pathBase + '/Data/' + self.csv[state]['img_path']
+            self.csv[state]['mask_path'] = cfg.path.pathBase + '/Data/' + self.csv[state]['mask_path']
+            # MOOD dataset may not have segmentations, handle both cases
+            if 'seg_path' in self.csv[state].columns and self.csv[state]['seg_path'].notna().any():
+                self.csv[state]['seg_path'] = cfg.path.pathBase + '/Data/' + self.csv[state]['seg_path']
+            else:
+                self.csv[state]['seg_path'] = None
+            
+            if cfg.mode != 't1':
+                self.csv[state]['img_path'] = self.csv[state]['img_path'].str.replace('t1',cfg.mode)
+
+    def setup(self, stage: Optional[str] = None):
+        # called on every GPU
+        if not hasattr(self,'val_eval'):
+            if self.cfg.sample_set: # for debugging
+                self.val_eval = create_dataset.Eval(self.csv['val'][0:8], self.cfg)
+                self.test_eval = create_dataset.Eval(self.csv['test'][0:8], self.cfg)
+            else :
+                self.val_eval = create_dataset.Eval(self.csv['val'], self.cfg)
+                self.test_eval = create_dataset.Eval(self.csv['test'], self.cfg)
+
+    def val_dataloader(self):
+        return DataLoader(self.val_eval, batch_size=1, num_workers=self.cfg.num_workers, pin_memory=True, shuffle=False)
+
+    def test_dataloader(self):
+        return DataLoader(self.test_eval, batch_size=1, num_workers=self.cfg.num_workers, pin_memory=True, shuffle=False)
