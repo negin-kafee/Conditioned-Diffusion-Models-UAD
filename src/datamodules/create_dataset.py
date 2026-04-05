@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import SimpleITK as sitk
 import torchio as tio
+import h5py
 sitk.ProcessObject.SetGlobalDefaultThreader("Platform")
 from multiprocessing import Manager
 
@@ -234,3 +235,98 @@ def sitk_reader(path):
         image_nii = sitk.CurvatureFlow(image1 = image_nii, timeStep = 0.125, numberOfIterations = 3)
     vol = sitk.GetArrayFromImage(image_nii).transpose(2,1,0)
     return vol, None
+
+
+class EvalH5(Dataset):
+    """Evaluation dataset that loads from H5 files.
+    
+    Args:
+        img_h5_path: Path to H5 file with FSL FAST segmented images
+        gt_h5_path: Path to H5 file with tumor ground truth masks
+        cfg: Config object with imageDim, rescaleFactor, etc.
+        setname: Name of the dataset (e.g., 'BraTS_T1_FAST')
+        stage: 'val' or 'test'
+    """
+    def __init__(self, img_h5_path, gt_h5_path, cfg, setname='BraTS_FAST', stage='test'):
+        self.img_h5_path = img_h5_path
+        self.gt_h5_path = gt_h5_path
+        self.cfg = cfg
+        self.setname = setname
+        self.stage = stage
+        
+        # Get keys from H5 file
+        with h5py.File(img_h5_path, 'r') as f:
+            self.keys = sorted(list(f.keys()))
+        
+        # Get target dimensions from config
+        self.target_shape = tuple(cfg.get('imageDim', (160, 192, 160)))
+        self.rescale_factor = cfg.get('rescaleFactor', 3.0)
+        
+    def __len__(self):
+        return len(self.keys)
+    
+    def __getitem__(self, idx):
+        key = self.keys[idx]
+        
+        # Load image and GT from H5
+        with h5py.File(self.img_h5_path, 'r') as f:
+            img_data = f[key][:]  # Shape: (H, W, D) with values 0,1,2,3
+        with h5py.File(self.gt_h5_path, 'r') as f:
+            gt_data = f[key][:]  # Shape: (H, W, D) with values 0,1
+        
+        # Normalize FSL FAST values (0,1,2,3) to (0, 0.33, 0.67, 1.0)
+        img_data = img_data.astype(np.float32) / 3.0
+        gt_data = gt_data.astype(np.float32)
+        
+        # Create brain mask from image (non-zero voxels)
+        mask_data = (img_data > 0).astype(np.float32)
+        
+        # Convert to torch tensors with channel dim: (1, H, W, D)
+        img_tensor = torch.from_numpy(img_data).unsqueeze(0)
+        gt_tensor = torch.from_numpy(gt_data).unsqueeze(0)
+        mask_tensor = torch.from_numpy(mask_data).unsqueeze(0)
+        
+        # Create TorchIO subject for transforms
+        subject = tio.Subject(
+            vol=tio.ScalarImage(tensor=img_tensor),
+            vol_orig=tio.ScalarImage(tensor=img_tensor.clone()),
+            seg_orig=tio.LabelMap(tensor=gt_tensor),
+            mask=tio.LabelMap(tensor=mask_tensor),
+            mask_orig=tio.LabelMap(tensor=mask_tensor.clone()),
+        )
+        
+        # Apply transforms (resize, etc.)
+        transform = get_transform_h5(self.cfg)
+        subject = transform(subject)
+        
+        # Return dict compatible with existing eval pipeline
+        return {
+            'vol': subject['vol'],
+            'vol_orig': subject['vol_orig'],
+            'seg_orig': subject['seg_orig'],
+            'mask': subject['mask'],
+            'mask_orig': subject['mask_orig'],
+            'age': torch.tensor([0]),
+            'ID': f'BraTS_{key}',
+            'label': torch.tensor([1]),  # All BraTS samples have tumors
+            'Dataset': self.setname,
+            'stage': self.stage,
+            'seg_available': True,
+        }
+
+
+def get_transform_h5(cfg):
+    """Transform for H5-based evaluation (no intensity rescaling needed for FSL FAST)."""
+    h, w, d = tuple(cfg.get('imageDim', (160, 192, 160)))
+
+    if not cfg.resizedEvaluation:
+        exclude_from_resampling = ['vol_orig', 'mask_orig', 'seg_orig']
+    else:
+        exclude_from_resampling = None
+
+    preprocess = tio.Compose([
+        tio.CropOrPad((h, w, d), padding_mode=0),
+        tio.Resample(cfg.get('rescaleFactor', 3.0), image_interpolation='nearest', exclude=exclude_from_resampling),
+    ])
+    
+    return preprocess

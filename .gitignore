@@ -13,6 +13,22 @@ data/
 logs/
 wandb/
 .autoenv
-# pc_environment.env
+pc_environment.env
 outputlog*
 errorlog*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.nbc
+*.nbi
+
+# Slurm logs
+slurm/logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+slurm/logs/

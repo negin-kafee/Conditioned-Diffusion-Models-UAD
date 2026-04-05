@@ -115,7 +115,7 @@ def log_hyperparameters(
     datamodule: pl.LightningDataModule,
     trainer: pl.Trainer,
     callbacks: List[pl.Callback],
-    logger: List[pl.loggers.LightningLoggerBase],
+    logger: List,
 ) -> None:
     """This method controls which parameters from Hydra config are saved by Lightning loggers.
     Additionaly saves:
@@ -142,7 +142,20 @@ def log_hyperparameters(
     hparams["model/params_not_trainable"] = sum(
         p.numel() for p in model.parameters() if not p.requires_grad
     )
-    hparams['run_id'] = trainer.logger.experiment[0].id
+    # Get run_id from wandb logger (handles both single logger and logger collection)
+    try:
+        if hasattr(trainer.logger, 'experiment'):
+            exp = trainer.logger.experiment
+            if hasattr(exp, 'id'):
+                hparams['run_id'] = exp.id
+            elif isinstance(exp, (list, tuple)) and len(exp) > 0:
+                hparams['run_id'] = exp[0].id if hasattr(exp[0], 'id') else 'unknown'
+            else:
+                hparams['run_id'] = 'unknown'
+        else:
+            hparams['run_id'] = 'unknown'
+    except Exception:
+        hparams['run_id'] = 'unknown'
     # send hparams to all loggers
     trainer.logger.log_hyperparams(hparams)
 
@@ -158,13 +171,13 @@ def finish(
     datamodule: pl.LightningDataModule,
     trainer: pl.Trainer,
     callbacks: List[pl.Callback],
-    logger: List[pl.loggers.LightningLoggerBase],
+    logger: List,
 ) -> None:
     """Makes sure everything closed properly."""
 
     # without this sweeps with wandb logger might crash!
     for lg in logger:
-        if isinstance(lg, pl.loggers.wandb.WandbLogger):
+        if isinstance(lg, pl.loggers.WandbLogger):
             import wandb
 
             wandb.finish()
@@ -190,7 +203,7 @@ def get_checkpoint(cfg, path):
     checkpoint_to_load = cfg.get("checkpoint",'last') # default to last.ckpt 
     all_checkpoints = os.listdir(checkpoint_path + '/checkpoints')
     hparams = get_yaml(path+'/csv//hparams.yaml')
-    wandbID = hparams['run_id']
+    wandbID = hparams.get('run_id', None)  # Handle missing run_id gracefully
     checkpoints = {}
     for fold in range(cfg.get('num_folds',1)):
         checkpoints[f'fold-{fold+1}'] = [] # dict to store the checkpoints with their path for different folds

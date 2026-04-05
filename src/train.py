@@ -6,7 +6,10 @@ from pytorch_lightning import (
     seed_everything,
 )
 from omegaconf import DictConfig, OmegaConf, open_dict
-from pytorch_lightning.plugins import DDPPlugin
+try:
+    from pytorch_lightning.plugins import DDPPlugin
+except ImportError:
+    from pytorch_lightning.strategies import DDPStrategy as DDPPlugin
 import hydra
 from omegaconf import DictConfig
 from typing import List, Optional
@@ -15,7 +18,10 @@ import os
 import warnings
 import torch
 from src.utils import utils
-from pytorch_lightning.loggers import LightningLoggerBase
+try:
+    from pytorch_lightning.loggers import LightningLoggerBase
+except ImportError:
+    from pytorch_lightning.loggers import Logger as LightningLoggerBase
 import pickle
 
 os.environ['NUMEXPR_MAX_THREADS'] = '16'
@@ -47,9 +53,12 @@ def train(cfg: DictConfig) -> Optional[float]:
 
     cfg.logger.wandb.group = cfg.name  # specify group name in wandb 
 
-    # Set plugins for lightning trainer
+    # Set plugins/strategy for lightning trainer
     if cfg.trainer.get('accelerator',None) == 'ddp': # for better performance in ddp mode
-        plugs = DDPPlugin(find_unused_parameters=False)
+        try:
+            plugs = DDPPlugin(find_unused_parameters=False)
+        except TypeError:
+            plugs = DDPPlugin(find_unused_parameters=False)
     else: 
         plugs = None
 
@@ -105,17 +114,21 @@ def train(cfg: DictConfig) -> Optional[float]:
                     log.info(f"Instantiating logger <{lg_conf._target_}>")
                     logger.append(hydra.utils.instantiate(lg_conf))
 
-        # Load checkpoint if specified
+        # Load checkpoint if specified (for eval or resume)
+        ckpt_path_for_trainer = None
         if cfg.get('load_checkpoint') and (cfg.get('onlyEval',False) or cfg.get('resume_train',False) ): # pass checkpoint to resume from
+            ckpt_path_for_trainer = checkpoints[f"fold-{fold+1}"]
             with open_dict(cfg):
-                cfg.trainer.resume_from_checkpoint = checkpoints[f"fold-{fold+1}"]
-                cfg.ckpt_path=None
-            log.info(f"Restoring Trainer State of loaded checkpoint: ",cfg.trainer.resume_from_checkpoint)
+                cfg.ckpt_path = ckpt_path_for_trainer
+            log.info(f"Will load checkpoint: {ckpt_path_for_trainer}")
 
         # Init lightning trainer
         log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
+        trainer_kwargs = dict(callbacks=callbacks, logger=logger, _convert_="partial")
+        if plugs is not None:
+            trainer_kwargs['strategy'] = plugs
         trainer: Trainer = hydra.utils.instantiate(
-            cfg.trainer, callbacks=callbacks, logger=logger, _convert_="partial", plugins=plugs
+            cfg.trainer, **trainer_kwargs
         )          
 
         # Send some parameters from config to all lightning loggers
@@ -139,8 +152,17 @@ def train(cfg: DictConfig) -> Optional[float]:
         # logging
         log.info(f"Best checkpoint path:\n{trainer.checkpoint_callback.best_model_path}")
         log.info(f"Best checkpoint metric:\n{trainer.checkpoint_callback.best_model_score}")
-        trainer.logger.experiment[0].log({'best_ckpt_path':trainer.checkpoint_callback.best_model_path})
-        trainer.logger.experiment[0].log({'logdir':trainer.log_dir})
+        # Handle both single logger and logger collection (PyTorch Lightning 2.x compatibility)
+        try:
+            exp = trainer.logger.experiment
+            if hasattr(exp, 'log'):
+                exp.log({'best_ckpt_path': trainer.checkpoint_callback.best_model_path})
+                exp.log({'logdir': trainer.log_dir})
+            elif isinstance(exp, (list, tuple)) and len(exp) > 0:
+                exp[0].log({'best_ckpt_path': trainer.checkpoint_callback.best_model_path})
+                exp[0].log({'logdir': trainer.log_dir})
+        except Exception as e:
+            log.warning(f"Could not log to experiment: {e}")
 
         # metrics
         validation_metrics = trainer.callback_metrics
@@ -160,7 +182,16 @@ def train(cfg: DictConfig) -> Optional[float]:
             preds_dict = {'val':{},'test':{}} # a dict for each data set
             
             sets = {
-                    't2':['Datamodules_eval.Brats21','Datamodules_eval.MSLUB','Datamodules_train.IXI'],
+                    't2':['Datamodules_eval.Brats21','Datamodules_eval.Brats20','Datamodules_eval.MSLUB','Datamodules_train.IXI',
+                          'Datamodules_eval.BraTS_T2','Datamodules_eval.BraTS_T2_seg','Datamodules_eval.BraTS_T2_FAST',
+                          'Datamodules_train.IXI_3T_T2','Datamodules_train.IXI_15T_T2',
+                          'Datamodules_train.IXI_3T_15T_T2','Datamodules_train.IXI_3T_15T_T2_seg',
+                          'Datamodules_train.MOOD_IXI_all_seg'],
+                    't1':['Datamodules_eval.BraTS_T1','Datamodules_eval.BraTS_T1_seg','Datamodules_eval.BraTS_T1_FAST',
+                          'Datamodules_train.MOOD_3T_T1','Datamodules_train.MOOD_IXI_3T_T1',
+                          'Datamodules_train.MOOD_IXI_3T_15T_T1','Datamodules_train.MOOD_IXI_3T_15T_T1_seg'],
+                    't1t2':['Datamodules_eval.BraTS_T1','Datamodules_eval.BraTS_T2','Datamodules_train.MOOD_IXI_3T_T1T2',
+                           'Datamodules_train.MOOD_IXI_all'],
                    }
             
                 
@@ -197,7 +228,11 @@ def train(cfg: DictConfig) -> Optional[float]:
                 preds_dict['test'][set] = trainer.lightning_module.eval_dict
                 log_dict.update(utils.summarize(preds_dict['test'][set],'test')) # sets prefix test/ and removes lists for better logging in wandb
                 log_dict = utils.summarize(log_dict,f'{fold+1}/'+set) # sets prefix for each data set
-                trainer.logger.experiment[0].log(log_dict)
+                # Handle PL 2.x single logger or PL 1.x list of loggers
+                experiment = trainer.logger.experiment
+                if isinstance(experiment, list):
+                    experiment = experiment[0]
+                experiment.log(log_dict)
 
                 
 

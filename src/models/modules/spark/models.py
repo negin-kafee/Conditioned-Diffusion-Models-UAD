@@ -7,7 +7,10 @@
 import torch
 from timm import create_model
 from timm.loss import SoftTargetCrossEntropy
-from timm.models.layers import drop
+try:
+    from timm.models.layers import DropPath
+except ImportError:
+    from timm.layers import DropPath  # timm >= 0.9
 
 import torchvision
 from src.models.modules.spark.resnet import ResNet
@@ -23,7 +26,7 @@ def _ex_repr(self):
         if not k.startswith('_') and k != 'training'
         and not isinstance(v, (torch.nn.Module, torch.Tensor))
     )
-for clz in (torch.nn.CrossEntropyLoss, SoftTargetCrossEntropy, drop.DropPath):
+for clz in (torch.nn.CrossEntropyLoss, SoftTargetCrossEntropy, DropPath):
     if hasattr(clz, 'extra_repr'):
         clz.extra_repr = _ex_repr
     else:

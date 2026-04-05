@@ -1,0 +1,56 @@
+# @package _global_
+
+# Conditional DDPM for MOOD + IXI all datasets combined (3T+1.5T, T1+T2)
+# python run.py experiment=cDDPM/cDDPM_MOOD_IXI_all.yaml
+
+defaults:
+  - override /trainer: default.yaml
+  - override /model: DDPM_2D.yaml
+  - override /datamodule: MOOD_IXI_all.yaml
+
+datamodule:
+  cfg:
+    rescaleFactor: 2
+    imageDim: [192, 192, 100]
+    mode: t1t2
+    aug_intensity: True
+
+model:
+  cfg:
+    test_timesteps: 500
+    pretrained_backbone: false
+    condition: True
+
+# To train:
+# python run.py experiment=cDDPM/cDDPM_MOOD_IXI_all num_folds=1
+
+# This combines:
+# - MOOD 3T T1 data
+# - IXI 3T T1 data  
+# - IXI 3T T2 data
+# - IXI 1.5T T1 data
+# - IXI 1.5T T2 data
+# Total: All available MOOD and IXI data across field strengths and modalities
+
+tags: ["cDDPM", "MOOD", "IXI", "all", "T1T2", "3T", "1.5T"]
+
+trainer:
+  max_epochs: 1600
+  devices: 1
+  accelerator: gpu
+
+callbacks:
+  model_checkpoint:
+    monitor: "val/Loss_comb"
+    mode: "min"
+    save_top_k: 1
+    save_last: true
+    filename: "epoch-{epoch:02d}_step-{step}"
+
+logger:
+  wandb:
+    project: "Conditioned-Diffusion-Models-UAD"
+    name: "cDDPM_MOOD_IXI_all"
+    tags: ${tags}
+
+name: cDDPM_MOOD_IXI_all

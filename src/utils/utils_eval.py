@@ -242,6 +242,8 @@ def _test_end(self) :
         self.eval_dict['PrecisionPerSliceStd'] = np.std(self.eval_dict['PrecisionPerSlice'])
         self.eval_dict['RecallPerSliceMean'] = np.mean(self.eval_dict['RecallPerSlice'])
         self.eval_dict['RecallPerSliceStd'] = np.std(self.eval_dict['RecallPerSlice'])
+        self.eval_dict['DiceScorePerSliceMean'] = np.mean(self.eval_dict['DiceScorePerSlice'])
+        self.eval_dict['DiceScorePerSliceStd'] = np.std(self.eval_dict['DiceScorePerSlice'])
         self.eval_dict['AccuracyPerVolMean'] = np.mean(self.eval_dict['AccuracyPerVol'])
         self.eval_dict['AccuracyPerVolStd'] = np.std(self.eval_dict['AccuracyPerVol'])
         self.eval_dict['SpecificityPerVolMean'] = np.mean(self.eval_dict['SpecificityPerVol'])
@@ -610,7 +612,11 @@ def log_images(self, diff_volume, data_orig, data_seg, data_mask, final_volume, 
         
         if self.cfg.get('save_to_disc',True):
             plt.savefig(os.path.join(ImagePathList['imagesGrid'], '{}_{}_Grid.png'.format(ID[0],j)),bbox_inches='tight')
-        self.logger.experiment[0].log({'images/{}/{}_Grid.png'.format(self.dataset[0],j) : wandb.Image(plt)})
+        # Handle PL 2.x single logger or PL 1.x list of loggers
+        experiment = self.logger.experiment
+        if isinstance(experiment, list):
+            experiment = experiment[0]
+        experiment.log({'images/{}/{}_Grid.png'.format(self.dataset[0],j) : wandb.Image(plt)})
         plt.clf()
         plt.cla()
         plt.close()

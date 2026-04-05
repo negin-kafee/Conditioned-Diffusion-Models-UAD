@@ -27,6 +27,21 @@ cfg:
         test: ${data_dir}/Data/splits/Brats21_test.csv
         val: ${data_dir}/Data/splits/Brats21_val.csv
 
+    Brats20:
+      IDs: 
+        test: ${data_dir}/Data/splits/Brats20_test.csv
+        val: ${data_dir}/Data/splits/Brats20_val.csv
+
+    BraTS_T1:
+      IDs:
+        test: ${data_dir}/Data/splits/BraTS_T1_test.csv
+        val: ${data_dir}/Data/splits/BraTS_T1_val.csv
+
+    BraTS_T2:
+      IDs:
+        test: ${data_dir}/Data/splits/BraTS_T2_test.csv
+        val: ${data_dir}/Data/splits/BraTS_T2_val.csv
+
     MSLUB:
       IDs: 
         test: ${data_dir}/Data/splits/MSLUB_test.csv
@@ -64,11 +79,11 @@ cfg:
 
 
   # Evaluation
-  mode: t1
+  # mode: t2 - data is already T2, filtering skipped automatically
+  mode: t2
   resizedEvaluation: True
   testsets: # specify which test sets to evaluate!
-  - Datamodules_eval.Brats21
-  - Datamodules_eval.MSLUB
+  - Datamodules_eval.Brats20
   - Datamodules_train.IXI
 
 

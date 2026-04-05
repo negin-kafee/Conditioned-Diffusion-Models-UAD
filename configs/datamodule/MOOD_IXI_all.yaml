@@ -1,0 +1,69 @@
+_target_: src.datamodules.Datamodules_train.MOOD_IXI_all
+
+cfg:
+  name: MOOD_IXI_all
+  path:
+    pathBase: ${data_dir}/MOOD_IXI_all
+
+    MOOD_IXI_all:
+      IDs:
+        train:
+          - ${data_dir}/MOOD_IXI_all/Data/splits/MOOD_IXI_all_train_fold0.csv
+          - ${data_dir}/MOOD_IXI_all/Data/splits/MOOD_IXI_all_train_fold1.csv
+          - ${data_dir}/MOOD_IXI_all/Data/splits/MOOD_IXI_all_train_fold2.csv
+          - ${data_dir}/MOOD_IXI_all/Data/splits/MOOD_IXI_all_train_fold3.csv
+          - ${data_dir}/MOOD_IXI_all/Data/splits/MOOD_IXI_all_train_fold4.csv
+        val:
+          - ${data_dir}/MOOD_IXI_all/Data/splits/MOOD_IXI_all_val_fold0.csv
+          - ${data_dir}/MOOD_IXI_all/Data/splits/MOOD_IXI_all_val_fold1.csv
+          - ${data_dir}/MOOD_IXI_all/Data/splits/MOOD_IXI_all_val_fold2.csv
+          - ${data_dir}/MOOD_IXI_all/Data/splits/MOOD_IXI_all_val_fold3.csv
+          - ${data_dir}/MOOD_IXI_all/Data/splits/MOOD_IXI_all_val_fold4.csv
+        test: ${data_dir}/MOOD_IXI_all/Data/splits/MOOD_IXI_all_test.csv
+
+    BraTS_T1:
+      IDs:
+        test: ${data_dir}/MOOD_IXI_all/Data/splits/BraTS_T1_test.csv
+        val: ${data_dir}/MOOD_IXI_all/Data/splits/BraTS_T1_val.csv
+
+    BraTS_T2:
+      IDs:
+        test: ${data_dir}/MOOD_IXI_all/Data/splits/BraTS_T2_test.csv
+        val: ${data_dir}/MOOD_IXI_all/Data/splits/BraTS_T2_val.csv
+
+  imageDim: [160, 192, 160]
+  rescaleFactor: 2
+  interRes: [8, 8, 5]
+  cropMode: 'isotropic'
+  spatialDims: ${model.cfg.spatialDims}
+  unisotropic_sampling: True
+  sample_set: False
+
+  preLoad: True
+  curvatureFlow: True
+  percentile: True
+  pad: True
+  permute: False
+
+  # Augmentations
+  randomRotate: False
+  rotateDegree: 5
+  horizontalFlip: False
+  randomBrightness: False
+  brightnessRange: [0.75, 1.25]
+  randomContrast: False
+  contrastRange: [0.75, 1.25]
+
+  modelpath: ${data_dir}/Data/pretrained_2D_model/
+  num_workers: 4
+  batch_size: 32
+  lr: 0.0001
+  droplast: True
+
+  # Evaluation
+  mode: t1t2
+  resizedEvaluation: True
+  testsets:
+    - Datamodules_eval.BraTS_T1
+    - Datamodules_eval.BraTS_T2
+    - Datamodules_train.MOOD_IXI_all

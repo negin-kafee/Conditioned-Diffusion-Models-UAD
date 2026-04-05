@@ -2,12 +2,13 @@
 
 wandb:
   _target_: pytorch_lightning.loggers.wandb.WandbLogger
-  project: "patched DDPMs MIDL23"
+  entity: null  # Set your WandB entity/team name here
+  project: "cDDPM-UAD"
   name:  ${hydra:job.name}
   save_dir: "."
   offline: False # set True to store all logs only locally
   id: null # pass correct id to resume experiment!
-  resume: False
+  resume: allow # Allow resuming runs
   log_model: False
   prefix: ""
   job_type: ""

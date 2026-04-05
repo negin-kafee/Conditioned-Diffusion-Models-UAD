@@ -1,0 +1,50 @@
+# @package _global_
+
+# Conditional DDPM for MOOD + IXI 3T T1-only dataset
+# python run.py experiment=cDDPM/cDDPM_MOOD_IXI_3T_T1.yaml
+
+defaults:
+  - override /trainer: default.yaml
+  - override /model: DDPM_2D.yaml
+  - override /datamodule: MOOD_IXI_3T_T1.yaml
+
+datamodule:
+  cfg:
+    rescaleFactor: 2
+    imageDim: [192, 192, 100]
+    mode: t1
+    aug_intensity: True
+
+model:
+  cfg:
+    test_timesteps: 500
+    dim_mults: [1, 2, 2]
+    unet_dim: 128
+    objective: pred_x0
+    loss: l1
+    residualmode: l1
+    OpenaiUnet: True
+    conv_resample: True
+    noisetype: simplex
+    dropout_unet: 0.0
+    condition: True
+    pretrained_backbone: True
+    backbone: resnet18
+
+num_folds: 5
+
+logger:
+  wandb:
+    project: Conditioned-Diffusion-Models-UAD
+
+ckpt_path: best
+
+trainer:
+  max_epochs: 1600
+  precision: 32
+  devices: 4
+  accelerator: gpu
+  strategy: ddp
+
+name: cDDPM_MOOD_IXI_3T_T1
+seed: 3141

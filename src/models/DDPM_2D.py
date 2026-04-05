@@ -4,7 +4,10 @@ from src.models.modules.DDPM_encoder import get_encoder
 import torch
 from src.utils.utils_eval import _test_step, _test_end, get_eval_dictionary
 import numpy as np
-from pytorch_lightning.core.lightning import LightningModule
+try:
+    from pytorch_lightning import LightningModule
+except ImportError:
+    from pytorch_lightning.core.lightning import LightningModule
 import torch.optim as optim
 from typing import Any
 import torchio as tio
