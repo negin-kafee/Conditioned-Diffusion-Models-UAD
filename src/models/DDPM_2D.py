@@ -78,7 +78,7 @@ class DDPM_2D(LightningModule):
             print('Loading pretrained encoder from: ', cfg.encoder_path)
             assert cfg.get('encoder_path',None) is not None
 
-            state_dict_pretrained = torch.load(cfg.get('encoder_path',None))['state_dict']
+            state_dict_pretrained = torch.load(cfg.get('encoder_path',None), map_location='cpu' if not torch.cuda.is_available() else None)['state_dict']
             new_statedict = OrderedDict()
             for key in zip(state_dict_pretrained): 
                 if 'slice_encoder' in key[0] :
@@ -193,7 +193,37 @@ class DDPM_2D(LightningModule):
         else: 
             latentSpace.append(torch.tensor([0],dtype=float).repeat(input.shape[0]))
 
-        if self.cfg.get('noise_ensemble',False): # evaluate with different noise levels
+        if self.cfg.get('residual_ensemble', False):
+            # A1: per-t residual stacking; fuse via max or z-mean before threshold.
+            timesteps = self.cfg.get(
+                'step_ensemble', [100, 150, 250, 500, 750])
+            fuse_mode = self.cfg.get('residual_fuse', 'max')
+            per_t_residuals = []
+            last_loss = None
+            for t in timesteps:
+                if self.cfg.get('noisetype') is not None:
+                    noise = gen_noise(self.cfg, input.shape).to(self.device)
+                else:
+                    noise = None
+                loss_diff, reco_t = self.diffusion(
+                    input, cond=features, t=t - 1, noise=noise)
+                per_t_residuals.append(torch.abs(input - reco_t))
+                last_loss = loss_diff
+            stack = torch.stack(per_t_residuals, dim=0)  # [T,D,C,H,W]
+            if fuse_mode == 'max':
+                r_fused = stack.max(dim=0).values
+            elif fuse_mode == 'zmean':
+                T = stack.size(0)
+                flat = stack.view(T, -1)
+                mu = flat.mean(dim=1).view(T, 1, 1, 1, 1)
+                sd = flat.std(dim=1).view(T, 1, 1, 1, 1).clamp_min(1e-8)
+                r_fused = ((stack - mu) / sd).mean(dim=0)
+            else:
+                raise ValueError(f"unknown residual_fuse={fuse_mode!r}")
+            # Pack synthetic reco so downstream residual recovers r_fused.
+            reco = input - r_fused
+            loss_diff = last_loss
+        elif self.cfg.get('noise_ensemble',False): # evaluate with different noise levels
             timesteps = self.cfg.get('step_ensemble',[250,500,750]) # timesteps to evaluate
             reco_ensemble = torch.zeros_like(input)
             for t in timesteps:
